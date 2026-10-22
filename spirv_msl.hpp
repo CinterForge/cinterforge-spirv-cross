@@ -297,10 +297,6 @@ static const uint32_t kBufferSizeBufferBinding = ~(2u);
 
 // Special constant used in a MSLResourceBinding binding
 // element to indicate the buffer binding used for the argument buffer itself.
-static const uint32_t kTextureOffsetBufferBinding = ~(3u);
-
-// Special constant used in a MSLResourceBinding binding
-// element to indicate the buffer binding used for the argument buffer itself.
 // This buffer binding should be kept as small as possible as all automatic bindings for buffers
 // will start at max(kArgumentBufferBinding) + 1.
 static const uint32_t kArgumentBufferBinding = ~(4u);
@@ -337,11 +333,28 @@ public:
 		uint32_t shader_index_buffer_index = 21;
 		uint32_t shader_patch_input_buffer_index = 20;
 		uint32_t draw_info_index = 20;
+		// Transform feedback. Vertex shaders: buffer of the captured outputs. Emulated geometry shaders:
+		// transform feedback buffer b is at xfb_buffer_index - b, plus the session state, per-primitive
+		// slots and mode buffers (see emit_mesh_wrapper()).
 		uint32_t xfb_buffer_index = 19;
+		uint32_t xfb_session_index = 0;
+		uint32_t xfb_prims_index = 0;
+		uint32_t xfb_mode_index = 0;
 		uint32_t texture_offset_buffer_index = 18;
+		uint32_t reversed_depth_viewport_buffer_index = 17;
+		uint32_t depth_clip_state_buffer_index = 16;
 		uint32_t shader_input_wg_index = 0;
 		uint32_t device_index = 0;
 		uint32_t enable_frag_output_mask = 0xffffffff;
+		// Numeric types of the color attachments, by fragment output location: bit N of frag_output_float_mask,
+		// frag_output_sint_mask or frag_output_uint_mask marks location N as a floating-point or normalized, a
+		// signed integer or an unsigned integer attachment. Metal fails render pipelines whose fragment output
+		// has another numeric type than its color attachment (Vulkan only leaves the values written undefined),
+		// so such outputs are declared with the attachment's numeric type and converted to it, bit cast where
+		// the widths match. Outputs at locations in none of the masks keep their type.
+		uint32_t frag_output_float_mask = 0;
+		uint32_t frag_output_sint_mask = 0;
+		uint32_t frag_output_uint_mask = 0;
 		// Metal doesn't allow setting a fixed sample mask directly in the pipeline.
 		// We can evade this restriction by ANDing the internal sample_mask output
 		// of the shader with the additional fixed sample mask.
@@ -361,6 +374,8 @@ public:
 		bool view_index_from_device_index = false;
 		bool dispatch_base = false;
 		bool texture_1D_as_2D = false;
+		bool emulate_reversed_depth_viewport = false;
+		bool emulate_depth_clip_enable = false;
 
 		// Enable use of Metal argument buffers.
 		// MSL 2.0 must also be enabled.
@@ -542,9 +557,16 @@ public:
 		// functions, and geometry shaders as [[mesh]].
 		bool for_mesh_pipeline = false;
 
+		// Vertex shaders of plain vertex pipelines (neither vertex_for_tessellation nor for_mesh_pipeline): inputs at
+		// locations without an msl_shader_input (no vertex attribute) read zeros. Metal fails a render pipeline whose
+		// vertex function reads an attribute missing from the vertex descriptor, while Vulkan only leaves the values
+		// read undefined; such inputs become zero-initialized local variables instead of stage_in members.
+		bool zero_missing_vertex_attributes = false;
+
 		enum class PrimitiveTopology
 		{
-			Triangles, TriangleStrip, Lines, LineStrip, Points
+			Triangles, TriangleStrip, Lines, LineStrip, Points,
+			LinesAdjacency, LineStripAdjacency, TrianglesAdjacency, TriangleStripAdjacency
 		} input_primitive_type;
 
 		// If set, manual fixups of gradient vectors for cube texture lookups will be performed.
@@ -590,6 +612,11 @@ public:
 		// OOB image reads return zero with (0,0,1) for missing G, B, A components.
 		// OOB image writes and atomics are discarded/return zero.
 		bool robust_image_access2 = false;
+
+		// VK_EXT_robustness2 nullDescriptor is enabled: image size/levels/samples queries on null
+		// (nil) textures must return zero. Metal does not guarantee that for nil textures.
+		// Implied by robust_image_access2.
+		bool null_descriptor = false;
 
 		bool is_ios() const
 		{
@@ -679,10 +706,20 @@ public:
 
 	bool needs_xfb_buffer() const
 	{
-		return xfb_buffer_id != 0;
+		return xfb_buffer_id != 0 || mesh_xfb_used_mask != 0 || stage_xfb_unsupported;
 	}
 
 
+	// Provide feedback to calling API to allow it to pass depth clip
+	// emulation state.
+	bool needs_depth_clip_state_buffer() const
+	{
+		if (!msl_options.emulate_depth_clip_enable || !stage_out_var_id || capture_output_to_buffer)
+			return false;
+
+		return (is_vertex_like_shader() && !qual_pos_var_name.empty()) ||
+		       (get_execution_model() == ExecutionModelFragment && !qual_frag_depth_var_name.empty());
+	}
 	// Provide feedback to calling API to allow it to pass a buffer
 	// containing the dispatch base workgroup ID.
 	bool needs_dispatch_base_buffer() const
@@ -967,6 +1004,7 @@ protected:
 	                                           const uint32_t *args, uint32_t count) override;
 	void emit_header() override;
 	void emit_function_prototype(SPIRFunction &func, const Bitset &return_flags) override;
+	void append_global_func_args(const SPIRFunction &func, uint32_t index, SmallVector<std::string> &arglist) override;
 	void emit_sampled_image_op(uint32_t result_type, uint32_t result_id, uint32_t image_id, uint32_t samp_id) override;
 	void emit_subgroup_op(const Instruction &i) override;
 	void emit_subgroup_cluster_op(uint32_t result_type, uint32_t result_id, uint32_t cluster_size, uint32_t op0,
@@ -1043,6 +1081,7 @@ protected:
 	bool is_mesh_shader() const;
 
 	void preprocess_op_codes();
+	void zero_missing_vertex_attributes();
 	void localize_global_variables();
 	void extract_global_variables_from_functions();
 	void mark_packable_structs();
@@ -1119,6 +1158,11 @@ protected:
 	void emit_interface_block(uint32_t ib_var_id);
 	bool maybe_emit_array_assignment(uint32_t id_lhs, uint32_t id_rhs);
 	void emit_mesh_wrapper();
+	void emit_mesh_payload_vertex_struct();
+	uint32_t mesh_payload_location_slots(const SPIRType &type);
+	void emit_mesh_payload_store(const SPIRType &type, const std::string &expr, uint32_t location, uint32_t component);
+	std::string mesh_payload_load(const SPIRType &type, uint32_t location, uint32_t component);
+	void emit_mesh_payload_load(const SPIRType &type, const std::string &lhs, uint32_t location, uint32_t component);
 	bool is_var_runtime_size_array(const SPIRVariable &var) const;
 	uint32_t get_resource_array_size(const SPIRType &type, uint32_t id) const;
 
@@ -1149,6 +1193,9 @@ protected:
 	std::string append_member_name(const std::string &qualifier, const SPIRType &type, uint32_t index);
 	std::string ensure_valid_name(std::string name, std::string pfx);
 	std::string to_sampler_expression(uint32_t id);
+	std::string to_plane_expression(const std::string &img_expr, uint32_t plane);
+	bool is_mesh_direct_input_builtin(const SPIRVariable &var);
+	std::string mesh_wrapper_resource_arg(const Entry_Point_Resource &resource);
 	std::string to_swizzle_expression(uint32_t id);
 	std::string to_texture_offset_expression(uint32_t id);
 	std::string to_buffer_size_expression(uint32_t id);
@@ -1158,7 +1205,10 @@ protected:
 	                                          const std::string &lod_expr, bool include_null_check = true);
 	std::string get_robust_image_zero_value(const SPIRType &result_type, uint32_t format_components);
 	// Robust buffer access helpers for robustBufferAccess2
-	std::string get_robust_buffer_array_length(const SPIRType &type, uint32_t var_id);
+	std::string get_robust_buffer_array_length(const SPIRType &type, uint32_t var_id, const std::string &descriptor_index = "");
+	std::string robust_descriptor_index(const std::string &chain_expr, const SPIRVariable &var);
+	uint32_t get_robust_array_stride(const SPIRType &type);
+	std::string robust_zero_expression(const SPIRType &type);
 
 	bool is_sample_rate() const;
 	bool is_intersection_query() const;
@@ -1271,6 +1321,14 @@ protected:
 	uint32_t view_mask_buffer_id = 0;
 	uint32_t dynamic_offsets_buffer_id = 0;
 	uint32_t xfb_buffer_id = 0;
+	// Transform feedback buffers written by an emulated geometry shader, and their strides.
+	uint32_t mesh_xfb_used_mask = 0;
+	// Transform feedback from a vertex or tessellation evaluation shader: not emitted (the API reports it).
+	bool stage_xfb_unsupported = false;
+	uint32_t mesh_xfb_strides[4] = {};
+	void collect_mesh_xfb_buffers();
+	void emit_mesh_xfb_capture_function(const std::string &vertex_type);
+	void emit_mesh_xfb_store(const SPIRType &type, const std::string &expr, uint32_t buffer, uint32_t offset);
 	uint32_t uint_type_id = 0;
 	uint32_t shared_uint_type_id = 0;
 	uint32_t meshlet_type_id = 0;
@@ -1380,10 +1438,15 @@ protected:
 	bool needs_sample_id = false;
 	bool needs_helper_invocation = false;
 	bool needs_workgroup_zero_init = false;
+	// Workgroup variables of the module that this (non-compute) entry point does not reference.
+	std::unordered_set<uint32_t> unreferenced_workgroup_variables;
 	bool needs_point_size_output = false;
 	bool writes_to_depth = false;
 	bool writes_to_point_size = false;
 	std::string qual_pos_var_name;
+	std::string qual_viewport_idx_var_name;
+	std::string qual_frag_depth_var_name;
+	std::string depth_clip_viewport_idx_var_name;
 	std::string stage_in_var_name = "in";
 	std::string stage_out_var_name = "out";
 	std::string stage_out_mesh_primitive_var_name = "out_1";
@@ -1435,7 +1498,18 @@ protected:
 	uint32_t pending_robust_buffer_atomic_result_id = 0;
 
 	SmallVector<uint32_t> buffer_aliases_discrete;
+	// Geometry shaders (mesh emulation): copies of flattened output composites into the stage-out struct, run before
+	// every emitted vertex (the mesh stream emits the struct; fixup_hooks_out only run when the shader returns).
+	SmallVector<std::function<void()>> geometry_vertex_output_hooks;
+	// Variables that share an argument buffer binding with another variable (the declared one and its aliases):
+	// none of them is __restrict, so the aliases' casts keep the qualifiers of the declared member.
+	std::unordered_set<uint32_t> argument_buffer_overlapping_vars;
 	std::unordered_set<uint32_t> atomic_image_vars_emulated; // Emulate texture2D atomic operations
+	// Pointer operands of atomics, and whether the access chain being emitted is one of them: atomics on
+	// vector components behind buffer device addresses need a scalar pointer (see
+	// prepare_access_chain_for_scalar_access()).
+	std::unordered_set<uint32_t> atomic_pointer_ids;
+	bool emitting_atomic_access_chain = false;
 	std::unordered_set<uint32_t> pull_model_inputs;
 	std::unordered_set<uint32_t> recursive_inputs;
 
@@ -1473,6 +1547,9 @@ protected:
 	uint32_t get_target_components_for_fragment_location(uint32_t location) const;
 	uint32_t build_extended_vector_type(uint32_t type_id, uint32_t components,
 	                                    SPIRType::BaseType basetype = SPIRType::Unknown);
+	SPIRType::BaseType get_fragment_output_base_type(StorageClass storage, uint32_t location, const SPIRType &type) const;
+	uint32_t build_fragment_output_type(uint32_t type_id, uint32_t components, SPIRType::BaseType basetype);
+	std::string to_fragment_output_value(const SPIRType &type, SPIRType::BaseType basetype, const std::string &expr);
 	uint32_t build_msl_interpolant_type(uint32_t type_id, bool is_noperspective);
 
 	bool suppress_missing_prototypes = false;

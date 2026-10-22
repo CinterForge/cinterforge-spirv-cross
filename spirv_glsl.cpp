@@ -13329,6 +13329,9 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			{
 				e.implied_read_expressions = rhs_expr->implied_read_expressions;
 				e.expression_dependencies = rhs_expr->expression_dependencies;
+				// A copy of an access chain is the same lvalue (a[i]), not a pointer to dereference (MSL wrote *a[i]).
+				if (pointer)
+					e.access_chain = rhs_expr->access_chain;
 			}
 		}
 		break;
@@ -20129,6 +20132,13 @@ uint32_t CompilerGLSL::get_accumulated_member_location(const SPIRVariable &var, 
 
 StorageClass CompilerGLSL::get_expression_effective_storage_class(uint32_t ptr)
 {
+	// A physical pointer carries its storage class in its type. The variable it was loaded from
+	// (a push constant, a function variable holding the pointer value, ...) says nothing about the
+	// memory it points to.
+	auto &ptr_type = expression_type(ptr);
+	if (ptr_type.pointer && ptr_type.storage == StorageClassPhysicalStorageBuffer)
+		return StorageClassPhysicalStorageBuffer;
+
 	auto *var = maybe_get_backing_variable(ptr);
 
 	// If the expression has been lowered to a temporary, we need to use the Generic storage class.

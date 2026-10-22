@@ -3628,7 +3628,13 @@ bool Compiler::AnalyzeVariableScopeAccessHandler::handle(Op op, const uint32_t *
 		// Might be an access chain which we have to keep track of.
 		notify_variable_access(args[1], current_block->self);
 		if (access_chain_expressions.count(args[2]))
+		{
 			access_chain_expressions.insert(args[1]);
+			// A copy of an access chain points into the same variable: stores through it write the variable (else a
+			// constant-initialized array only written through the copy became a const lookup table).
+			auto &e = compiler.set<SPIRExpression>(args[1], "", args[0], true);
+			e.loaded_from = var ? VariableID(var->self) : VariableID(0);
+		}
 
 		// Might try to copy a Phi variable here.
 		notify_variable_access(args[2], current_block->self);
@@ -4227,13 +4233,15 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry, AnalyzeVariableScopeA
 					block_temporaries.emplace_back(handler.result_id_to_type[var.first], var.first);
 				}
 			}
-			else if (blocks.size() > 1)
+			else if (blocks.size() > 1 && !handler.access_chain_expressions.count(var.first))
 			{
 				// Keep track of the temporary as we might have to declare this temporary.
 				// This can happen if the loop header dominates a temporary, but we have a complex fallback loop.
 				// In this case, the header is actually inside the for (;;) {} block, and we have problems.
 				// What we need to do is hoist the temporaries outside the for (;;) {} block in case the header block
 				// declares the temporary.
+				// Access chains are expressions, not temporaries (see above): only their indices are declared. A
+				// declaration of one is never assigned, and pointers to images or samplers cannot be declared (MSL).
 				auto &block_temporaries = get<SPIRBlock>(dominating_block).potential_declare_temporary;
 				block_temporaries.emplace_back(handler.result_id_to_type[var.first], var.first);
 			}
