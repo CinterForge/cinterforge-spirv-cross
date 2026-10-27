@@ -1,0 +1,34 @@
+// !$*UTF8*$!
+{
+ archiveVersion = 1;
+ classes = {};
+ objectVersion = 60;
+ objects = {
+  B1A02B0000000000000000 /* spirv_cross.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = spirv_cross.cpp; sourceTree = "<group>"; };
+  B1A02B0000000000000001 /* spirv_cross.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = spirv_cross.hpp; sourceTree = "<group>"; };
+  B1A02B0000000000000002 /* spirv_msl.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = spirv_msl.cpp; sourceTree = "<group>"; };
+  B1A02B0000000000000003 /* spirv_msl.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = spirv_msl.hpp; sourceTree = "<group>"; };
+  B1A02B0000000000000004 /* spirv_glsl.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = spirv_glsl.cpp; sourceTree = "<group>"; };
+  B1A02B0000000000000005 /* spirv_glsl.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = spirv_glsl.hpp; sourceTree = "<group>"; };
+  B1A02B0000000000000006 /* spirv_hlsl.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = spirv_hlsl.cpp; sourceTree = "<group>"; };
+  B1A02B0000000000000007 /* spirv_hlsl.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = spirv_hlsl.hpp; sourceTree = "<group>"; };
+  B1A02B0000000000000008 /* spirv_parser.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = spirv_parser.cpp; sourceTree = "<group>"; };
+  B1A02B0000000000000009 /* spirv_parser.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = spirv_parser.hpp; sourceTree = "<group>"; };
+  B1A02B000000000000000A /* spirv_common.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = spirv_common.hpp; sourceTree = "<group>"; };
+  B1A02B000000000000000B /* spirv_cross_util.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = spirv_cross_util.cpp; sourceTree = "<group>"; };
+  B1A02B000000000000000C /* spirv_cross_util.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = spirv_cross_util.hpp; sourceTree = "<group>"; };
+  B1A02B000000000000000D /* spirv_cfg.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = spirv_cfg.cpp; sourceTree = "<group>"; };
+  B1A02B000000000000000E /* spirv_cfg.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = spirv_cfg.hpp; sourceTree = "<group>"; };
+  B1A02B000000000000000F /* spirv_cross_parsed_ir.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = spirv_cross_parsed_ir.cpp; sourceTree = "<group>"; };
+  B1A02B0000000000000010 /* spirv_cross_parsed_ir.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = spirv_cross_parsed_ir.hpp; sourceTree = "<group>"; };
+  B1A02B0000000000000011 /* spirv.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = spirv.hpp; sourceTree = "<group>"; };
+  B1A02B0000000000000012 /* CMakeLists.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = CMakeLists.txt; sourceTree = "<group>"; };
+  B1A02B0000000000000013 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = text; path = README.md; sourceTree = "<group>"; };
+  89B6BA43B2905B15C28A08BB = {isa = PBXGroup; children = (B1A02B0000000000000000, B1A02B0000000000000001, B1A02B0000000000000002, B1A02B0000000000000003, B1A02B0000000000000004, B1A02B0000000000000005, B1A02B0000000000000006, B1A02B0000000000000007, B1A02B0000000000000008, B1A02B0000000000000009, B1A02B000000000000000A, B1A02B000000000000000B, B1A02B000000000000000C, B1A02B000000000000000D, B1A02B000000000000000E, B1A02B000000000000000F, B1A02B0000000000000010, B1A02B0000000000000011, B1A02B0000000000000012, B1A02B0000000000000013, ); sourceTree = "<group>"; };
+  DB1254D17F5167BE77271BE7 = {isa = PBXProject; attributes = { LastUpgradeCheck = 1600; }; buildConfigurationList = 0648D390327CA4D644B2AD11; compatibilityVersion = "Xcode 16.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en, ); mainGroup = 89B6BA43B2905B15C28A08BB; projectDirPath = ""; projectRoot = ""; targets = (); };
+  C89937BF98882E0CA737A1BD = {isa = XCBuildConfiguration; buildSettings = {}; name = Debug; };
+  4BA7ECAA5658A7FE27218779 = {isa = XCBuildConfiguration; buildSettings = {}; name = Release; };
+  0648D390327CA4D644B2AD11 = {isa = XCConfigurationList; buildConfigurations = (C89937BF98882E0CA737A1BD, 4BA7ECAA5658A7FE27218779, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+ };
+ rootObject = DB1254D17F5167BE77271BE7;
+}
